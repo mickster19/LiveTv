@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
     <style>
         :root {
@@ -31,14 +32,17 @@
         .brand { color: var(--green); font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 1px; }
         .yt-link { color: #ff0000; font-size: 22px; text-decoration: none; }
 
-        /* --- AUTO SLIDER --- */
+        /* --- SLIDER --- */
         .slider-container { width: 92%; height: 180px; margin: 15px auto; border-radius: 20px; overflow: hidden; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.4); background: #111; }
         .slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1s ease-in-out; background-size: cover; background-position: center; }
         .slide.active { opacity: 1; }
         .slide-overlay { position: absolute; inset: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); display: flex; flex-direction: column; justify-content: flex-end; padding: 20px; }
 
-        /* --- AUTH BOX --- */
-        #auth-overlay { position: fixed; inset: 0; background: rgba(5, 8, 10, 0.95); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 25px; }
+        /* --- AUTH & TOKEN MODALS --- */
+        #auth-overlay, #token-modal, #video-modal { position: fixed; inset: 0; z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 25px; }
+        #auth-overlay, #token-modal { background: rgba(5, 8, 10, 0.98); }
+        #video-modal { background: black; flex-direction: column; z-index: 8000; padding: 0; }
+
         .auth-tabs { display: flex; background: #111; border-radius: 12px; margin-bottom: 20px; padding: 5px; }
         .auth-tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; border-radius: 10px; color: var(--text-grey); font-weight: bold; }
         .auth-tab.active { background: var(--green); color: black; }
@@ -47,8 +51,6 @@
         .input-box input { background: transparent; border: none; color: white; width: 100%; outline: none; }
         .btn-green { width: 100%; padding: 16px; background: var(--green); border: none; border-radius: 12px; color: black; font-weight: bold; cursor: pointer; transition: 0.3s; }
 
-        /* --- TOKEN MODAL --- */
-        #token-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 6000; display: flex; align-items: center; justify-content: center; padding: 20px; }
         .modal-content { background: var(--card); padding: 30px; border-radius: 20px; width: 100%; max-width: 350px; text-align: center; border: 1px solid var(--green); }
 
         /* --- GRID --- */
@@ -63,13 +65,23 @@
         .nav-item.active { color: var(--green); }
         .nav-item i { font-size: 20px; display: block; margin-bottom: 4px; }
 
-        #custom-alert { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); width: 85%; background: var(--green); color: black; padding: 12px; border-radius: 10px; font-weight: bold; z-index: 7000; transition: 0.5s; text-align: center; }
+        #custom-alert { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); width: 85%; background: var(--green); color: black; padding: 12px; border-radius: 10px; font-weight: bold; z-index: 9000; transition: 0.5s; text-align: center; }
         #custom-alert.show { top: 20px; }
     </style>
 </head>
 <body>
 
     <div id="custom-alert">MICKSTER TV ⚡</div>
+
+    <div id="video-modal" class="hidden">
+        <div style="width:100%; padding:15px; display:flex; justify-content:space-between; align-items:center; background:#0d1117;">
+            <h3 id="playing-now" style="color:var(--green); font-size:14px; text-transform:uppercase;">MICKSTER TV LIVE</h3>
+            <i class="fa-solid fa-xmark" onclick="closePlayer()" style="font-size:24px; cursor:pointer; color:white;"></i>
+        </div>
+        <div style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; background:#000;">
+            <video id="mickster-video" controls autoplay style="width:100%; max-height:100%;"></video>
+        </div>
+    </div>
 
     <div id="auth-overlay" class="hidden">
         <div style="width:100%; max-width:350px;">
@@ -130,14 +142,14 @@
                 <div style="width:80px; height:80px; border-radius:50%; background:var(--card); margin:0 auto; display:flex; align-items:center; justify-content:center; border:3px solid var(--green); font-size:35px; color:var(--green);"><i class="fa-solid fa-user-check"></i></div>
                 <h3 id="profile-name" style="margin-top:15px; font-size:20px;">Mtumiaji</h3>
                 <p id="profile-status" style="color:var(--accent); margin-top:5px; font-size:13px;">Token: Haipo</p>
-                
+                <div id="token-display-key" style="margin-top:5px; font-size:11px; color:var(--text-grey);"></div>
+
                 <div style="background:var(--card); padding:20px; border-radius:15px; margin-top:25px; text-align:left; border:1px solid rgba(255,255,255,0.05);">
                     <label style="color:var(--green); font-size:12px; font-weight:bold;">HARIRI TAARIFA</label>
                     <div class="input-box" style="margin-top:10px;"><input type="text" id="edit-name" placeholder="Jina Jipya"></div>
                     <div class="input-box"><input type="password" id="edit-pass" placeholder="Nywila Mpya"></div>
                     <button class="btn-green" style="padding:10px; font-size:13px;" onclick="updateUserInfo()">HIFADHI MABADILIKO</button>
                 </div>
-
                 <button class="btn-green" style="margin-top:20px; background:#222; color:white; padding:12px;" onclick="logout()">LOGOUT ACCOUNT</button>
             </div>
             <div id="guest-view">
@@ -155,7 +167,6 @@
     </nav>
 
     <script>
-        // --- SUPABASE CONFIG (KEYS ZAKO MPYA) ---
         const SUPABASE_URL = 'https://vcioivanuhqqucipdoge.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_BJXwjHQLipzLDk3vgki8TQ_3PiiOjl2'; 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -165,11 +176,37 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
+        // --- PLAYER LOGIC ---
+        function playM3U8(url, name) {
+            const video = document.getElementById('mickster-video');
+            const modal = document.getElementById('video-modal');
+            document.getElementById('playing-now').innerText = name;
+            modal.classList.remove('hidden');
+
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+                video.addEventListener('loadedmetadata', () => video.play());
+            } else {
+                showAlert("Browser haisupport video hii!");
+            }
+        }
+
+        function closePlayer() {
+            const video = document.getElementById('mickster-video');
+            video.pause();
+            video.src = "";
+            document.getElementById('video-modal').classList.add('hidden');
+        }
+
         // --- LOAD CHANNELS ---
         async function loadChannels() {
             const { data, error } = await _supabase.from('channels').select('*');
-            if(error) return console.log("Load Channels Error:", error.message);
-            
+            if(error) return;
             const grid = document.getElementById('main-grid'); 
             grid.innerHTML = "";
             data.forEach(c => {
@@ -182,7 +219,6 @@
             });
         }
 
-        // --- LOAD SLIDES ---
         async function loadSlides() {
             const { data, error } = await _supabase.from('slides').select('*');
             if(!error && data && data.length > 0) {
@@ -193,16 +229,13 @@
                     </div>`;
                 });
                 startSlider();
-            } else {
-                // Placeholder kama slides zikiwa tupu
-                document.getElementById('slider-box').innerHTML = `<div class="slide active" style="background:#111; display:flex; align-items:center; justify-content:center;"><h3>MICKSTER TV</h3></div>`;
             }
         }
 
         let currentSlide = 0;
         function startSlider() { setInterval(() => { const slides = document.querySelectorAll('.slide'); if(slides.length > 1) { slides[currentSlide].classList.remove('active'); currentSlide = (currentSlide + 1) % slides.length; slides[currentSlide].classList.add('active'); } }, 5000); }
 
-        // --- AUTH LOGIC ---
+        // --- AUTH & TOKEN ---
         function toggleAuth(show) { document.getElementById('auth-overlay').classList.toggle('hidden', !show); }
         function setAuthMode(mode) {
             document.getElementById('box-name').classList.toggle('hidden', mode === 'login');
@@ -223,7 +256,7 @@
                 if(error) return showAlert("Namba imeshasajiliwa!");
                 login(phone);
             } else {
-                const { data, error } = await _supabase.from('profiles').select('*').eq('phone', phone).single();
+                const { data } = await _supabase.from('profiles').select('*').eq('phone', phone).single();
                 if(data && data.password === pass) login(phone);
                 else showAlert("Namba au Nywila imekosewa!");
             }
@@ -242,47 +275,36 @@
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
             if(!inputKey) return showAlert("Weka Token!");
 
-            // Hakiki token kwenye database
-            const { data, error } = await _supabase.from('tokens').select('*').eq('key', inputKey).single();
-
+            const { data } = await _supabase.from('tokens').select('*').eq('key', inputKey).single();
             if(data) {
-                if(data.status !== "active") return showAlert("Token hii imeshatumika!");
+                if(data.status === "used" && data.device_id !== myDeviceId) return showAlert("Token imeshatumika kifaa kingine!");
                 
-                // Ifunge kwenye kifaa hiki
                 await _supabase.from('tokens').update({ status: 'used', device_id: myDeviceId }).eq('key', inputKey);
                 localStorage.setItem('mickster_active_token', inputKey);
                 document.getElementById('token-modal').classList.add('hidden');
                 updateProfileUI();
                 showAlert("Token Imewashwa! ✅");
-            } else {
-                showAlert("Token Sio Sahihi!");
-            }
+            } else { showAlert("Token Sio Sahihi!"); }
         }
 
-        function checkAndOpen(chan, link) {
+        async function checkAndOpen(chan, link) {
             if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
+            
             const activeToken = localStorage.getItem('mickster_active_token');
-            if(activeToken) {
-                window.open(link, '_blank');
-            } else {
-                document.getElementById('token-modal').classList.remove('hidden');
-            }
-        }
+            if(!activeToken) { document.getElementById('token-modal').classList.remove('hidden'); return; }
 
-        async function updateUserInfo() {
-            const phone = localStorage.getItem('mickster_user');
-            const newName = document.getElementById('edit-name').value.trim();
-            const newPass = document.getElementById('edit-pass').value.trim();
-            let updates = {};
-            if(newName) updates.full_name = newName;
-            if(newPass) updates.password = newPass;
-            const { error } = await _supabase.from('profiles').update(updates).eq('phone', phone);
-            if(!error) showAlert("Taarifa Zimesahihishwa! ✅");
-        }
-
-        function processPayment() {
-            if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
-            window.open(`https://wa.me/255791139331?text=Nahitaji Token: ${userPlan} kwa namba ${localStorage.getItem('mickster_user')}`, '_blank');
+            // Verifying token & expiry from Supabase
+            const { data } = await _supabase.from('tokens').select('expiry_date, status').eq('key', activeToken).single();
+            
+            if(data) {
+                if(new Date() > new Date(data.expiry_date)) {
+                    localStorage.removeItem('mickster_active_token');
+                    showAlert("Token yako IMEISHA!");
+                    document.getElementById('token-modal').classList.remove('hidden');
+                } else {
+                    playM3U8(link, chan);
+                }
+            } else { document.getElementById('token-modal').classList.remove('hidden'); }
         }
 
         function switchTab(t) {
@@ -299,18 +321,20 @@
                 document.getElementById('user-profile-view').classList.remove('hidden');
                 const { data } = await _supabase.from('profiles').select('full_name').eq('phone', phone).single();
                 if(data) document.getElementById('profile-name').innerText = data.full_name;
+                
                 const t = localStorage.getItem('mickster_active_token');
                 document.getElementById('profile-status').innerText = t ? "PREMIUM ACTIVE ✅" : "Token: Haipo";
                 document.getElementById('profile-status').style.color = t ? "var(--green)" : "var(--accent)";
+                document.getElementById('token-display-key').innerText = t ? "Key: " + t : "";
             }
         }
 
         function showAlert(msg) { const a = document.getElementById('custom-alert'); a.innerText = msg; a.classList.add('show'); setTimeout(() => a.classList.remove('show'), 3000); }
         function selectPlan(p, pr) { userPlan = p; userPrice = pr; showAlert("Umechagua: " + p); }
         function logout() { localStorage.removeItem('mickster_user'); localStorage.removeItem('mickster_active_token'); location.reload(); }
+        function processPayment() { if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; } window.open(`https://wa.me/255791139331?text=Nahitaji Token: ${userPlan} kwa namba ${localStorage.getItem('mickster_user')}`, '_blank'); }
 
         window.onload = () => { updateProfileUI(); loadChannels(); loadSlides(); };
     </script>
 </body>
 </html>
-
