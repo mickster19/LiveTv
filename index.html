@@ -41,12 +41,7 @@
         /* --- AUTH & TOKEN MODALS --- */
         #auth-overlay, #token-modal, #video-modal { position: fixed; inset: 0; z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 25px; }
         #auth-overlay, #token-modal { background: rgba(5, 8, 10, 0.98); }
-        
-        /* --- VIDEO PLAYER MODAL STYLING --- */
-        #video-modal { background: black; flex-direction: column; z-index: 8000; padding: 0; width: 100%; height: 100%; }
-        .video-player-container { position: relative; width: 100%; background: #000; display: flex; align-items: center; justify-content: center; flex: 1; }
-        #mickster-video { width: 100%; max-height: 100%; background: #000; outline: none; }
-        .video-controls-header { width: 100%; padding: 15px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.8); position: absolute; top: 0; z-index: 8001; }
+        #video-modal { background: black; flex-direction: column; z-index: 8000; padding: 0; }
 
         .auth-tabs { display: flex; background: #111; border-radius: 12px; margin-bottom: 20px; padding: 5px; }
         .auth-tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; border-radius: 10px; color: var(--text-grey); font-weight: bold; }
@@ -79,12 +74,13 @@
     <div id="custom-alert">MICKSTER TV ⚡</div>
 
     <div id="video-modal" class="hidden">
-        <div class="video-controls-header">
+        <div style="width:100%; padding:15px; display:flex; justify-content:space-between; align-items:center; background:#0d1117; z-index: 8001;">
             <h3 id="playing-now" style="color:var(--green); font-size:14px; text-transform:uppercase;">MICKSTER TV LIVE</h3>
             <i class="fa-solid fa-xmark" onclick="closePlayer()" style="font-size:24px; cursor:pointer; color:white;"></i>
         </div>
-        <div class="video-player-container">
-            <video id="mickster-video" controls playsinline autoplay style="width:100%;"></video>
+        <div style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; background:#000; position: relative;">
+            <video id="mickster-video" controls autoplay playsinline class="hidden" style="width:100%; max-height:100%;"></video>
+            <iframe id="mickster-iframe" class="hidden" style="width:100%; height:100%; border:none;" allowfullscreen allow="autoplay"></iframe>
         </div>
     </div>
 
@@ -148,13 +144,6 @@
                 <h3 id="profile-name" style="margin-top:15px; font-size:20px;">Mtumiaji</h3>
                 <p id="profile-status" style="color:var(--accent); margin-top:5px; font-size:13px;">Token: Haipo</p>
                 <div id="token-display-key" style="margin-top:5px; font-size:11px; color:var(--text-grey);"></div>
-
-                <div style="background:var(--card); padding:20px; border-radius:15px; margin-top:25px; text-align:left; border:1px solid rgba(255,255,255,0.05);">
-                    <label style="color:var(--green); font-size:12px; font-weight:bold;">HARIRI TAARIFA</label>
-                    <div class="input-box" style="margin-top:10px;"><input type="text" id="edit-name" placeholder="Jina Jipya"></div>
-                    <div class="input-box"><input type="password" id="edit-pass" placeholder="Nywila Mpya"></div>
-                    <button class="btn-green" style="padding:10px; font-size:13px;" onclick="updateUserInfo()">HIFADHI MABADILIKO</button>
-                </div>
                 <button class="btn-green" style="margin-top:20px; background:#222; color:white; padding:12px;" onclick="logout()">LOGOUT ACCOUNT</button>
             </div>
             <div id="guest-view">
@@ -181,64 +170,53 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // --- IMPROVED PLAYER LOGIC ---
+        // --- BORESHA PLAYER LOGIC (IFRAME + VIDEO) ---
         let hlsInstance = null;
 
         function playM3U8(url, name) {
             const video = document.getElementById('mickster-video');
+            const iframe = document.getElementById('mickster-iframe');
             const modal = document.getElementById('video-modal');
             document.getElementById('playing-now').innerText = name;
             modal.classList.remove('hidden');
 
-            // Safisha kama kuna instance ya hls inacheza
-            if (hlsInstance) {
-                hlsInstance.destroy();
-                hlsInstance = null;
-            }
+            // Safisha zote
+            video.classList.add('hidden');
+            iframe.classList.add('hidden');
+            video.pause();
+            video.src = "";
+            iframe.src = "";
+            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
 
-            if (Hls.isSupported()) {
-                hlsInstance = new Hls();
-                hlsInstance.loadSource(url);
-                hlsInstance.attachMedia(video);
-                hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-                    video.play().catch(e => {
-                        console.log("Autoplay blocked, user interaction needed.");
-                    });
-                });
-                
-                // Kosa la network likitokea
-                hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                showAlert("Network Error - Channel ipo offline.");
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                hlsInstance.recoverMediaError();
-                                break;
-                            default:
-                                hlsInstance.destroy();
-                                break;
-                        }
-                    }
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Kwa Safari (iPhone)
-                video.src = url;
-                video.addEventListener('loadedmetadata', () => video.play());
-            } else {
-                showAlert("Browser haisupport video hii!");
+            // 1. Angalia kama ni link ya PHP (TechnologyCloud)
+            if (url.includes('.php')) {
+                iframe.classList.remove('hidden');
+                iframe.src = url;
+            } 
+            // 2. Kama ni link ya kawaida ya m3u8 au mp4
+            else {
+                video.classList.remove('hidden');
+                if (Hls.isSupported()) {
+                    hlsInstance = new Hls();
+                    hlsInstance.loadSource(url);
+                    hlsInstance.attachMedia(video);
+                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play());
+                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                    video.src = url;
+                    video.play();
+                } else {
+                    showAlert("Format ya video haisupportiwi!");
+                }
             }
         }
 
         function closePlayer() {
             const video = document.getElementById('mickster-video');
+            const iframe = document.getElementById('mickster-iframe');
             video.pause();
-            if (hlsInstance) {
-                hlsInstance.destroy();
-                hlsInstance = null;
-            }
             video.src = "";
+            iframe.src = "";
+            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
             document.getElementById('video-modal').classList.add('hidden');
         }
 
@@ -274,7 +252,6 @@
         let currentSlide = 0;
         function startSlider() { setInterval(() => { const slides = document.querySelectorAll('.slide'); if(slides.length > 1) { slides[currentSlide].classList.remove('active'); currentSlide = (currentSlide + 1) % slides.length; slides[currentSlide].classList.add('active'); } }, 5000); }
 
-        // --- AUTH & TOKEN ---
         function toggleAuth(show) { document.getElementById('auth-overlay').classList.toggle('hidden', !show); }
         function setAuthMode(mode) {
             document.getElementById('box-name').classList.toggle('hidden', mode === 'login');
@@ -287,9 +264,7 @@
             const pass = document.getElementById('auth-pass').value;
             const name = document.getElementById('reg-name').value;
             const mode = document.getElementById('tab-login').classList.contains('active') ? 'login' : 'register';
-
             if(!phone || !pass) return showAlert("Jaza namba na nywila!");
-
             if(mode === 'register') {
                 const { error } = await _supabase.from('profiles').insert([{ phone: phone, password: pass, full_name: name || "Mtumiaji" }]);
                 if(error) return showAlert("Namba imeshasajiliwa!");
@@ -313,11 +288,9 @@
         async function activateToken() {
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
             if(!inputKey) return showAlert("Weka Token!");
-
             const { data } = await _supabase.from('tokens').select('*').eq('key', inputKey).single();
             if(data) {
                 if(data.status === "used" && data.device_id !== myDeviceId) return showAlert("Token imeshatumika kifaa kingine!");
-                
                 await _supabase.from('tokens').update({ status: 'used', device_id: myDeviceId }).eq('key', inputKey);
                 localStorage.setItem('mickster_active_token', inputKey);
                 document.getElementById('token-modal').classList.add('hidden');
@@ -328,12 +301,10 @@
 
         async function checkAndOpen(chan, link) {
             if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
-            
             const activeToken = localStorage.getItem('mickster_active_token');
             if(!activeToken) { document.getElementById('token-modal').classList.remove('hidden'); return; }
 
-            const { data } = await _supabase.from('tokens').select('expiry_date, status').eq('key', activeToken).single();
-            
+            const { data } = await _supabase.from('tokens').select('expiry_date').eq('key', activeToken).single();
             if(data) {
                 if(new Date() > new Date(data.expiry_date)) {
                     localStorage.removeItem('mickster_active_token');
@@ -359,7 +330,6 @@
                 document.getElementById('user-profile-view').classList.remove('hidden');
                 const { data } = await _supabase.from('profiles').select('full_name').eq('phone', phone).single();
                 if(data) document.getElementById('profile-name').innerText = data.full_name;
-                
                 const t = localStorage.getItem('mickster_active_token');
                 document.getElementById('profile-status').innerText = t ? "PREMIUM ACTIVE ✅" : "Token: Haipo";
                 document.getElementById('profile-status').style.color = t ? "var(--green)" : "var(--accent)";
