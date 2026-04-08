@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MICKSTER TV | Live Portal</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         :root {
             --green: #00E676;
@@ -103,28 +105,14 @@
 
     <main>
         <section id="sec-home">
-            <div class="slider-container">
+            <div class="slider-container" id="slider-box">
                 <div class="slide active" style="background-image: url('https://pbs.twimg.com/media/Fr2jM3CWYAA0mYl.jpg');">
-                    <div class="slide-overlay"><h3>Ligi Kuu Tanzania</h3></div>
-                </div>
-                <div class="slide" style="background-image: url('https://img.freepik.com/free-vector/soccer-stadium_1284-22432.jpg');">
-                    <div class="slide-overlay"><h3>UEFA Champions League</h3></div>
-                </div>
-                <div class="slide" style="background-image: url('https://pbs.twimg.com/media/GJMv04oWQAAtK7h.jpg');">
-                    <div class="slide-overlay"><h3>English Premier League</h3></div>
+                    <div class="slide-overlay"><h3>Inapakia...</h3></div>
                 </div>
             </div>
             <div style="padding: 15px 20px; font-weight: bold; border-left: 4px solid var(--green); margin: 5px 0 10px 15px;">LIVE CHANNELS</div>
             <div class="grid" id="main-grid">
-                <div class="card" onclick="checkAndOpen('Azam Sport 1')">
-                    <div class="thumb" style="background-image:url('https://pbs.twimg.com/media/Fr2jM3CWYAA0mYl.jpg')"><div class="live-tag">LIVE</div></div>
-                    <div style="padding:12px; font-size:13px; font-weight:600;">Azam Sport 1</div>
                 </div>
-                <div class="card" onclick="checkAndOpen('Azam Sport 2')">
-                    <div class="thumb" style="background-image:url('https://pbs.twimg.com/media/Fp7v-58WYAIdZ3D.jpg')"><div class="live-tag">LIVE</div></div>
-                    <div style="padding:12px; font-size:13px; font-weight:600;">Azam Sport 2</div>
-                </div>
-            </div>
         </section>
 
         <section id="sec-malipo" class="hidden">
@@ -163,21 +151,64 @@
     </nav>
 
     <script>
-        const API_KEY = "AIzaSyDiNjWTVcqZYsiHDWyxvU35qoAakwhFZKk";
+        // --- FIREBASE CONFIG ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyDiNjWTVcqZYsiHDWyxvU35qoAakwhFZKk",
+            authDomain: "mickster-tv.firebaseapp.com",
+            databaseURL: "https://mickster-tv-default-rtdb.firebaseio.com",
+            projectId: "mickster-tv",
+            storageBucket: "mickster-tv.appspot.com",
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
         let userPlan = "Siku 3", userPrice = "1,000";
         let isLoggedIn = localStorage.getItem('mickster_user') ? true : false;
 
-        // --- AUTO SLIDE LOGIC ---
-        let currentSlide = 0;
-        const slides = document.querySelectorAll('.slide');
-        function showNextSlide() {
-            slides[currentSlide].classList.remove('active');
-            currentSlide = (currentSlide + 1) % slides.length;
-            slides[currentSlide].classList.add('active');
+        // --- LOAD DATA ---
+        function loadChannels() {
+            db.ref('channels').on('value', snap => {
+                const grid = document.getElementById('main-grid');
+                grid.innerHTML = "";
+                snap.forEach(child => {
+                    const c = child.val();
+                    grid.innerHTML += `
+                        <div class="card" onclick="checkAndOpen('${c.name}', '${c.link}')">
+                            <div class="thumb" style="background-image:url('${c.icon || 'https://via.placeholder.com/150'}')"><div class="live-tag">LIVE</div></div>
+                            <div style="padding:12px; font-size:13px; font-weight:600;">${c.name}</div>
+                        </div>`;
+                });
+            });
         }
-        setInterval(showNextSlide, 4000);
 
-        // --- AUTH ---
+        function loadSlides() {
+            db.ref('slides').on('value', snap => {
+                const slider = document.getElementById('slider-box');
+                slider.innerHTML = "";
+                let i = 0;
+                snap.forEach(child => {
+                    const s = child.val();
+                    slider.innerHTML += `
+                        <div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');">
+                            <div class="slide-overlay"><h3>${s.cap}</h3></div>
+                        </div>`;
+                    i++;
+                });
+            });
+        }
+
+        // --- SLIDER ENGINE ---
+        let currentSlide = 0;
+        setInterval(() => {
+            const slides = document.querySelectorAll('.slide');
+            if(slides.length > 1) {
+                slides[currentSlide].classList.remove('active');
+                currentSlide = (currentSlide + 1) % slides.length;
+                slides[currentSlide].classList.add('active');
+            }
+        }, 4000);
+
+        // --- AUTH LOGIC ---
         function toggleAuth(show) { document.getElementById('auth-overlay').classList.toggle('hidden', !show); }
         function setAuthMode(mode) {
             document.getElementById('box-name').classList.toggle('hidden', mode === 'login');
@@ -191,59 +222,83 @@
             isLoggedIn = true;
             toggleAuth(false);
             updateProfileUI();
-            showAlert("Umeingia kwa mafanikio!");
+            showAlert("Karibu MICKSTER TV!");
         }
 
-        // --- TOKEN ---
-        function checkAndOpen(chan) {
-            if(!isLoggedIn) { showAlert("Ingia kwanza kutazama!"); switchTab('wasifu'); return; }
-            const savedToken = localStorage.getItem('mickster_active_token');
-            if (savedToken) { showAlert("Inapakia " + chan + "..."); } 
-            else { document.getElementById('token-modal').classList.remove('hidden'); }
+        // --- TOKEN CHECK ---
+        function checkAndOpen(chan, link) {
+            if(!isLoggedIn) { showAlert("Ingia kwanza kutazama!"); switchTab('wasifu'); toggleAuth(true); return; }
+            const activeToken = localStorage.getItem('mickster_active_token');
+            if(activeToken) {
+                db.ref('tokens').orderByChild('key').equalTo(activeToken).once('value', snap => {
+                    if(snap.exists()) { showAlert("Inapakia " + chan + "..."); window.open(link, '_blank'); }
+                    else { showAlert("Token imeisha muda!"); localStorage.removeItem('mickster_active_token'); document.getElementById('token-modal').classList.remove('hidden'); }
+                });
+            } else { document.getElementById('token-modal').classList.remove('hidden'); }
         }
+
         function activateToken() {
             const input = document.getElementById('modal-token-input').value;
-            if(!input) return showAlert("Jaza token!");
-            showAlert("Inahakiki...");
-            setTimeout(() => {
-                localStorage.setItem('mickster_active_token', input);
-                document.getElementById('token-modal').classList.add('hidden');
-                updateProfileUI();
-                showAlert("Token Imekubaliwa ✅");
-            }, 1500);
+            if(!input) return showAlert("Weka token!");
+            db.ref('tokens').orderByChild('key').equalTo(input).once('value', snap => {
+                if(snap.exists()) {
+                    localStorage.setItem('mickster_active_token', input);
+                    document.getElementById('token-modal').classList.add('hidden');
+                    updateProfileUI();
+                    showAlert("Token Imekubaliwa! ✅");
+                } else { showAlert("Token haipo!"); }
+            });
         }
 
-        // --- UI ---
+        // --- PAYMENT LOGIC (Marekebisho Hapa) ---
         function selectPlan(p, pr) { userPlan = p; userPrice = pr; showAlert("Umechagua: " + p); }
+        
         function processPayment() {
-            if(!isLoggedIn) { toggleAuth(true); return; }
+            // Lazima awe ameingia akaunti kwanza
+            if(!isLoggedIn) { 
+                showAlert("Tafadhali ingia kwenye akaunti kwanza!"); 
+                switchTab('wasifu'); 
+                toggleAuth(true); 
+                return; 
+            }
+            // Kama ameingia, ndio anaweza kulipia
             window.open(`https://wa.me/255791139331?text=Nahitaji Token: ${userPlan} (${userPrice}/-)`, '_blank');
         }
+
+        // --- UI UTILS ---
         function switchTab(t) {
             document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
             document.getElementById('sec-' + t).classList.remove('hidden');
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById('nav-' + t).classList.add('active');
         }
+
         function updateProfileUI() {
             if(isLoggedIn) {
                 document.getElementById('guest-view').classList.add('hidden');
                 document.getElementById('user-profile-view').classList.remove('hidden');
                 document.getElementById('profile-name').innerText = localStorage.getItem('mickster_user');
                 if(localStorage.getItem('mickster_active_token')) {
-                    document.getElementById('profile-status').innerText = "Token: Premium Active ✅";
+                    document.getElementById('profile-status').innerText = "Premium Account ✅";
                     document.getElementById('profile-status').style.color = "var(--green)";
                 }
             }
         }
+
         function showAlert(msg) {
             const alert = document.getElementById('custom-alert');
             alert.innerText = msg;
             alert.classList.add('show');
             setTimeout(() => alert.classList.remove('show'), 3000);
         }
+
         function logout() { localStorage.clear(); location.reload(); }
-        window.onload = updateProfileUI;
+
+        window.onload = () => {
+            updateProfileUI();
+            loadChannels();
+            loadSlides();
+        };
     </script>
 </body>
-                </html>
+</html>
