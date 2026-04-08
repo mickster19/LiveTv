@@ -155,7 +155,7 @@
     </nav>
 
     <script>
-        // --- SUPABASE CONFIG (SALAMA ZAIDI) ---
+        // --- SUPABASE CONFIG (KEYS ZAKO MPYA) ---
         const SUPABASE_URL = 'https://vcioivanuhqqucipdoge.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_BJXwjHQLipzLDk3vgki8TQ_3PiiOjl2'; 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -165,27 +165,37 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // --- LOAD DATA (MICKSTER TV SUPABASE) ---
+        // --- LOAD CHANNELS ---
         async function loadChannels() {
             const { data, error } = await _supabase.from('channels').select('*');
-            if(error) return console.log(error);
+            if(error) return console.log("Load Channels Error:", error.message);
             
             const grid = document.getElementById('main-grid'); 
             grid.innerHTML = "";
             data.forEach(c => {
-                grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}')"><div class="thumb" style="background-image:url('${c.icon_url || 'https://via.placeholder.com/150'}')"><div class="live-tag">LIVE</div></div><div style="padding:12px; font-size:13px; font-weight:600;">${c.channel_name}</div></div>`;
+                grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}')">
+                    <div class="thumb" style="background-image:url('${c.icon_url || 'https://via.placeholder.com/150'}')">
+                        <div class="live-tag">LIVE</div>
+                    </div>
+                    <div style="padding:12px; font-size:13px; font-weight:600;">${c.channel_name}</div>
+                </div>`;
             });
         }
 
+        // --- LOAD SLIDES ---
         async function loadSlides() {
-            // Hapa nimeiacha template kwa ajili yako ukitengeneza table ya 'slides'
             const { data, error } = await _supabase.from('slides').select('*');
-            if(!error && data) {
+            if(!error && data && data.length > 0) {
                 const slider = document.getElementById('slider-box'); slider.innerHTML = "";
                 data.forEach((s, i) => {
-                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');"><div class="slide-overlay"><h3>${s.caption || ''}</h3></div></div>`;
+                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');">
+                        <div class="slide-overlay"><h3>${s.caption || ''}</h3></div>
+                    </div>`;
                 });
                 startSlider();
+            } else {
+                // Placeholder kama slides zikiwa tupu
+                document.getElementById('slider-box').innerHTML = `<div class="slide active" style="background:#111; display:flex; align-items:center; justify-content:center;"><h3>MICKSTER TV</h3></div>`;
             }
         }
 
@@ -209,8 +219,8 @@
             if(!phone || !pass) return showAlert("Jaza namba na nywila!");
 
             if(mode === 'register') {
-                const { error } = await _supabase.from('profiles').insert([{ phone, password: pass, full_name: name || "User" }]);
-                if(error) return showAlert("Imeshindwa kusajili!");
+                const { error } = await _supabase.from('profiles').insert([{ phone: phone, password: pass, full_name: name || "Mtumiaji" }]);
+                if(error) return showAlert("Namba imeshasajiliwa!");
                 login(phone);
             } else {
                 const { data, error } = await _supabase.from('profiles').select('*').eq('phone', phone).single();
@@ -225,24 +235,27 @@
             toggleAuth(false);
             updateProfileUI();
             showAlert("Karibu MICKSTER TV!");
-            loadChannels(); // Refresh data ikishafunguliwa
+            loadChannels();
         }
 
-        async function updateUserInfo() {
-            const phone = localStorage.getItem('mickster_user');
-            const newName = document.getElementById('edit-name').value.trim();
-            const newPass = document.getElementById('edit-pass').value.trim();
-            
-            let updates = {};
-            if(newName) updates.full_name = newName;
-            if(newPass) updates.password = newPass;
+        async function activateToken() {
+            const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
+            if(!inputKey) return showAlert("Weka Token!");
 
-            if(!newName && !newPass) return showAlert("Jaza taarifa!");
+            // Hakiki token kwenye database
+            const { data, error } = await _supabase.from('tokens').select('*').eq('key', inputKey).single();
 
-            const { error } = await _supabase.from('profiles').update(updates).eq('phone', phone);
-            if(!error) {
-                showAlert("Taarifa Zimehifadhiwa! ✅");
+            if(data) {
+                if(data.status !== "active") return showAlert("Token hii imeshatumika!");
+                
+                // Ifunge kwenye kifaa hiki
+                await _supabase.from('tokens').update({ status: 'used', device_id: myDeviceId }).eq('key', inputKey);
+                localStorage.setItem('mickster_active_token', inputKey);
+                document.getElementById('token-modal').classList.add('hidden');
                 updateProfileUI();
+                showAlert("Token Imewashwa! ✅");
+            } else {
+                showAlert("Token Sio Sahihi!");
             }
         }
 
@@ -251,16 +264,20 @@
             const activeToken = localStorage.getItem('mickster_active_token');
             if(activeToken) {
                 window.open(link, '_blank');
-            } else document.getElementById('token-modal').classList.remove('hidden');
+            } else {
+                document.getElementById('token-modal').classList.remove('hidden');
+            }
         }
 
-        async function activateToken() {
-            const input = document.getElementById('modal-token-input').value.toUpperCase().trim();
-            // Simu itahifadhi token locally kwa sasa
-            localStorage.setItem('mickster_active_token', input);
-            document.getElementById('token-modal').classList.add('hidden');
-            updateProfileUI();
-            showAlert("Token Imekubaliwa! ✅");
+        async function updateUserInfo() {
+            const phone = localStorage.getItem('mickster_user');
+            const newName = document.getElementById('edit-name').value.trim();
+            const newPass = document.getElementById('edit-pass').value.trim();
+            let updates = {};
+            if(newName) updates.full_name = newName;
+            if(newPass) updates.password = newPass;
+            const { error } = await _supabase.from('profiles').update(updates).eq('phone', phone);
+            if(!error) showAlert("Taarifa Zimesahihishwa! ✅");
         }
 
         function processPayment() {
@@ -280,12 +297,10 @@
                 const phone = localStorage.getItem('mickster_user');
                 document.getElementById('guest-view').classList.add('hidden');
                 document.getElementById('user-profile-view').classList.remove('hidden');
-                
                 const { data } = await _supabase.from('profiles').select('full_name').eq('phone', phone).single();
                 if(data) document.getElementById('profile-name').innerText = data.full_name;
-
                 const t = localStorage.getItem('mickster_active_token');
-                document.getElementById('profile-status').innerText = t ? "Premium: " + t + " ✅" : "Token: Haipo";
+                document.getElementById('profile-status').innerText = t ? "PREMIUM ACTIVE ✅" : "Token: Haipo";
                 document.getElementById('profile-status').style.color = t ? "var(--green)" : "var(--accent)";
             }
         }
@@ -298,3 +313,4 @@
     </script>
 </body>
 </html>
+
