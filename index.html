@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MICKSTER TV | Live Portal</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         :root {
             --green: #00E676;
@@ -31,7 +32,7 @@
         .yt-link { color: #ff0000; font-size: 22px; text-decoration: none; }
 
         /* --- AUTO SLIDER --- */
-        .slider-container { width: 92%; height: 180px; margin: 15px auto; border-radius: 20px; overflow: hidden; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+        .slider-container { width: 92%; height: 180px; margin: 15px auto; border-radius: 20px; overflow: hidden; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.4); background: #111; }
         .slide { position: absolute; inset: 0; opacity: 0; transition: opacity 1s ease-in-out; background-size: cover; background-position: center; }
         .slide.active { opacity: 1; }
         .slide-overlay { position: absolute; inset: 0; background: linear-gradient(transparent, rgba(0,0,0,0.85)); display: flex; flex-direction: column; justify-content: flex-end; padding: 20px; }
@@ -88,7 +89,7 @@
     <div id="token-modal" class="hidden">
         <div class="modal-content">
             <h3 style="color:var(--green)">WEKA TOKEN</h3>
-            <p style="font-size:12px; color:var(--text-grey); margin: 15px 0;">Token inahitajika kutazama. Itahifadhiwa mpaka muda wake uishe.</p>
+            <p style="font-size:12px; color:var(--text-grey); margin: 15px 0;">Token inahitajika kutazama. Inajifunga kwenye simu moja tu.</p>
             <div class="input-box"><input type="text" id="modal-token-input" placeholder="MICK-XXXXXX"></div>
             <button class="btn-green" onclick="activateToken()">ACTIVATE SASA</button>
             <p style="margin-top:15px; font-size:11px; color:var(--text-grey); cursor:pointer" onclick="switchTab('malipo'); document.getElementById('token-modal').classList.add('hidden')">Sina Token? Lipia Hapa</p>
@@ -99,20 +100,15 @@
         <div class="brand">MICKSTER TV</div>
         <div class="top-icons">
             <a href="https://youtube.com/@m45z9o?si=2pb80nZcANifsHSt" target="_blank" class="yt-link"><i class="fa-brands fa-youtube"></i></a>
-            <div class="user-icon" onclick="switchTab('wasifu')"><i class="fa-regular fa-user" style="color:var(--green)"></i></div>
+            <div class="user-icon" style="display:inline-block; margin-left:15px" onclick="switchTab('wasifu')"><i class="fa-regular fa-user" style="color:var(--green); font-size:20px;"></i></div>
         </div>
     </header>
 
     <main>
         <section id="sec-home">
-            <div class="slider-container" id="slider-box">
-                <div class="slide active" style="background-image: url('https://pbs.twimg.com/media/Fr2jM3CWYAA0mYl.jpg');">
-                    <div class="slide-overlay"><h3>Inapakia...</h3></div>
-                </div>
-            </div>
+            <div class="slider-container" id="slider-box"></div>
             <div style="padding: 15px 20px; font-weight: bold; border-left: 4px solid var(--green); margin: 5px 0 10px 15px;">LIVE CHANNELS</div>
-            <div class="grid" id="main-grid">
-                </div>
+            <div class="grid" id="main-grid"></div>
         </section>
 
         <section id="sec-malipo" class="hidden">
@@ -129,12 +125,20 @@
             <div style="padding:20px;"><button class="btn-green" onclick="processPayment()">LIPIA SASA</button></div>
         </section>
 
-        <section id="sec-wasifu" class="hidden" style="padding:40px; text-align:center;">
+        <section id="sec-wasifu" class="hidden" style="padding:20px; text-align:center;">
             <div id="user-profile-view" class="hidden">
-                <div style="width:90px; height:90px; border-radius:50%; background:var(--card); margin:0 auto; display:flex; align-items:center; justify-content:center; border:3px solid var(--green); font-size:40px; color:var(--green);"><i class="fa-solid fa-user-check"></i></div>
-                <h3 id="profile-name" style="margin-top:20px; font-size:22px;">Mtumiaji</h3>
-                <p id="profile-status" style="color:var(--accent); margin-top:10px;">Token: Haipo</p>
-                <button class="btn-green" style="margin-top:40px; background:#222; color:white;" onclick="logout()">LOGOUT</button>
+                <div style="width:80px; height:80px; border-radius:50%; background:var(--card); margin:0 auto; display:flex; align-items:center; justify-content:center; border:3px solid var(--green); font-size:35px; color:var(--green);"><i class="fa-solid fa-user-check"></i></div>
+                <h3 id="profile-name" style="margin-top:15px; font-size:20px;">Mtumiaji</h3>
+                <p id="profile-status" style="color:var(--accent); margin-top:5px; font-size:13px;">Token: Haipo</p>
+                
+                <div style="background:var(--card); padding:20px; border-radius:15px; margin-top:25px; text-align:left; border:1px solid rgba(255,255,255,0.05);">
+                    <label style="color:var(--green); font-size:12px; font-weight:bold;">HARIRI TAARIFA</label>
+                    <div class="input-box" style="margin-top:10px;"><input type="text" id="edit-name" placeholder="Jina Jipya"></div>
+                    <div class="input-box"><input type="password" id="edit-pass" placeholder="Nywila Mpya"></div>
+                    <button class="btn-green" style="padding:10px; font-size:13px;" onclick="updateUserInfo()">HIFADHI MABADILIKO</button>
+                </div>
+
+                <button class="btn-green" style="margin-top:20px; background:#222; color:white; padding:12px;" onclick="logout()">LOGOUT ACCOUNT</button>
             </div>
             <div id="guest-view">
                 <i class="fa-solid fa-circle-user" style="font-size: 80px; color: var(--text-grey);"></i>
@@ -151,62 +155,42 @@
     </nav>
 
     <script>
-        // --- FIREBASE CONFIG ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyDiNjWTVcqZYsiHDWyxvU35qoAakwhFZKk",
-            authDomain: "mickster-tv.firebaseapp.com",
-            databaseURL: "https://mickster-tv-default-rtdb.firebaseio.com",
-            projectId: "mickster-tv",
-            storageBucket: "mickster-tv.appspot.com",
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        // --- SUPABASE CONFIG (SALAMA ZAIDI) ---
+        const SUPABASE_URL = 'https://vcioivanuhqqucipdoge.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_BJXwjHQLipzLDk3vgki8TQ_3PiiOjl2'; 
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let userPlan = "Siku 3", userPrice = "1,000";
         let isLoggedIn = localStorage.getItem('mickster_user') ? true : false;
+        let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // --- LOAD DATA ---
-        function loadChannels() {
-            db.ref('channels').on('value', snap => {
-                const grid = document.getElementById('main-grid');
-                grid.innerHTML = "";
-                snap.forEach(child => {
-                    const c = child.val();
-                    grid.innerHTML += `
-                        <div class="card" onclick="checkAndOpen('${c.name}', '${c.link}')">
-                            <div class="thumb" style="background-image:url('${c.icon || 'https://via.placeholder.com/150'}')"><div class="live-tag">LIVE</div></div>
-                            <div style="padding:12px; font-size:13px; font-weight:600;">${c.name}</div>
-                        </div>`;
-                });
+        // --- LOAD DATA (MICKSTER TV SUPABASE) ---
+        async function loadChannels() {
+            const { data, error } = await _supabase.from('channels').select('*');
+            if(error) return console.log(error);
+            
+            const grid = document.getElementById('main-grid'); 
+            grid.innerHTML = "";
+            data.forEach(c => {
+                grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}')"><div class="thumb" style="background-image:url('${c.icon_url || 'https://via.placeholder.com/150'}')"><div class="live-tag">LIVE</div></div><div style="padding:12px; font-size:13px; font-weight:600;">${c.channel_name}</div></div>`;
             });
         }
 
-        function loadSlides() {
-            db.ref('slides').on('value', snap => {
-                const slider = document.getElementById('slider-box');
-                slider.innerHTML = "";
-                let i = 0;
-                snap.forEach(child => {
-                    const s = child.val();
-                    slider.innerHTML += `
-                        <div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');">
-                            <div class="slide-overlay"><h3>${s.cap}</h3></div>
-                        </div>`;
-                    i++;
+        async function loadSlides() {
+            // Hapa nimeiacha template kwa ajili yako ukitengeneza table ya 'slides'
+            const { data, error } = await _supabase.from('slides').select('*');
+            if(!error && data) {
+                const slider = document.getElementById('slider-box'); slider.innerHTML = "";
+                data.forEach((s, i) => {
+                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');"><div class="slide-overlay"><h3>${s.caption || ''}</h3></div></div>`;
                 });
-            });
-        }
-
-        // --- SLIDER ENGINE ---
-        let currentSlide = 0;
-        setInterval(() => {
-            const slides = document.querySelectorAll('.slide');
-            if(slides.length > 1) {
-                slides[currentSlide].classList.remove('active');
-                currentSlide = (currentSlide + 1) % slides.length;
-                slides[currentSlide].classList.add('active');
+                startSlider();
             }
-        }, 4000);
+        }
+
+        let currentSlide = 0;
+        function startSlider() { setInterval(() => { const slides = document.querySelectorAll('.slide'); if(slides.length > 1) { slides[currentSlide].classList.remove('active'); currentSlide = (currentSlide + 1) % slides.length; slides[currentSlide].classList.add('active'); } }, 5000); }
 
         // --- AUTH LOGIC ---
         function toggleAuth(show) { document.getElementById('auth-overlay').classList.toggle('hidden', !show); }
@@ -215,57 +199,75 @@
             document.getElementById('tab-login').classList.toggle('active', mode === 'login');
             document.getElementById('tab-register').classList.toggle('active', mode === 'register');
         }
-        function handleAuth() {
-            const phone = document.getElementById('auth-phone').value;
-            if(!phone) return showAlert("Weka namba ya simu!");
+
+        async function handleAuth() {
+            const phone = document.getElementById('auth-phone').value.trim();
+            const pass = document.getElementById('auth-pass').value;
+            const name = document.getElementById('reg-name').value;
+            const mode = document.getElementById('tab-login').classList.contains('active') ? 'login' : 'register';
+
+            if(!phone || !pass) return showAlert("Jaza namba na nywila!");
+
+            if(mode === 'register') {
+                const { error } = await _supabase.from('profiles').insert([{ phone, password: pass, full_name: name || "User" }]);
+                if(error) return showAlert("Imeshindwa kusajili!");
+                login(phone);
+            } else {
+                const { data, error } = await _supabase.from('profiles').select('*').eq('phone', phone).single();
+                if(data && data.password === pass) login(phone);
+                else showAlert("Namba au Nywila imekosewa!");
+            }
+        }
+
+        function login(phone) {
             localStorage.setItem('mickster_user', phone);
             isLoggedIn = true;
             toggleAuth(false);
             updateProfileUI();
             showAlert("Karibu MICKSTER TV!");
+            loadChannels(); // Refresh data ikishafunguliwa
         }
 
-        // --- TOKEN CHECK ---
+        async function updateUserInfo() {
+            const phone = localStorage.getItem('mickster_user');
+            const newName = document.getElementById('edit-name').value.trim();
+            const newPass = document.getElementById('edit-pass').value.trim();
+            
+            let updates = {};
+            if(newName) updates.full_name = newName;
+            if(newPass) updates.password = newPass;
+
+            if(!newName && !newPass) return showAlert("Jaza taarifa!");
+
+            const { error } = await _supabase.from('profiles').update(updates).eq('phone', phone);
+            if(!error) {
+                showAlert("Taarifa Zimehifadhiwa! ✅");
+                updateProfileUI();
+            }
+        }
+
         function checkAndOpen(chan, link) {
-            if(!isLoggedIn) { showAlert("Ingia kwanza kutazama!"); switchTab('wasifu'); toggleAuth(true); return; }
+            if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
             const activeToken = localStorage.getItem('mickster_active_token');
             if(activeToken) {
-                db.ref('tokens').orderByChild('key').equalTo(activeToken).once('value', snap => {
-                    if(snap.exists()) { showAlert("Inapakia " + chan + "..."); window.open(link, '_blank'); }
-                    else { showAlert("Token imeisha muda!"); localStorage.removeItem('mickster_active_token'); document.getElementById('token-modal').classList.remove('hidden'); }
-                });
-            } else { document.getElementById('token-modal').classList.remove('hidden'); }
+                window.open(link, '_blank');
+            } else document.getElementById('token-modal').classList.remove('hidden');
         }
 
-        function activateToken() {
-            const input = document.getElementById('modal-token-input').value;
-            if(!input) return showAlert("Weka token!");
-            db.ref('tokens').orderByChild('key').equalTo(input).once('value', snap => {
-                if(snap.exists()) {
-                    localStorage.setItem('mickster_active_token', input);
-                    document.getElementById('token-modal').classList.add('hidden');
-                    updateProfileUI();
-                    showAlert("Token Imekubaliwa! ✅");
-                } else { showAlert("Token haipo!"); }
-            });
+        async function activateToken() {
+            const input = document.getElementById('modal-token-input').value.toUpperCase().trim();
+            // Simu itahifadhi token locally kwa sasa
+            localStorage.setItem('mickster_active_token', input);
+            document.getElementById('token-modal').classList.add('hidden');
+            updateProfileUI();
+            showAlert("Token Imekubaliwa! ✅");
         }
 
-        // --- PAYMENT LOGIC (Marekebisho Hapa) ---
-        function selectPlan(p, pr) { userPlan = p; userPrice = pr; showAlert("Umechagua: " + p); }
-        
         function processPayment() {
-            // Lazima awe ameingia akaunti kwanza
-            if(!isLoggedIn) { 
-                showAlert("Tafadhali ingia kwenye akaunti kwanza!"); 
-                switchTab('wasifu'); 
-                toggleAuth(true); 
-                return; 
-            }
-            // Kama ameingia, ndio anaweza kulipia
-            window.open(`https://wa.me/255791139331?text=Nahitaji Token: ${userPlan} (${userPrice}/-)`, '_blank');
+            if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
+            window.open(`https://wa.me/255791139331?text=Nahitaji Token: ${userPlan} kwa namba ${localStorage.getItem('mickster_user')}`, '_blank');
         }
 
-        // --- UI UTILS ---
         function switchTab(t) {
             document.querySelectorAll('main section').forEach(s => s.classList.add('hidden'));
             document.getElementById('sec-' + t).classList.remove('hidden');
@@ -273,32 +275,26 @@
             document.getElementById('nav-' + t).classList.add('active');
         }
 
-        function updateProfileUI() {
+        async function updateProfileUI() {
             if(isLoggedIn) {
+                const phone = localStorage.getItem('mickster_user');
                 document.getElementById('guest-view').classList.add('hidden');
                 document.getElementById('user-profile-view').classList.remove('hidden');
-                document.getElementById('profile-name').innerText = localStorage.getItem('mickster_user');
-                if(localStorage.getItem('mickster_active_token')) {
-                    document.getElementById('profile-status').innerText = "Premium Account ✅";
-                    document.getElementById('profile-status').style.color = "var(--green)";
-                }
+                
+                const { data } = await _supabase.from('profiles').select('full_name').eq('phone', phone).single();
+                if(data) document.getElementById('profile-name').innerText = data.full_name;
+
+                const t = localStorage.getItem('mickster_active_token');
+                document.getElementById('profile-status').innerText = t ? "Premium: " + t + " ✅" : "Token: Haipo";
+                document.getElementById('profile-status').style.color = t ? "var(--green)" : "var(--accent)";
             }
         }
 
-        function showAlert(msg) {
-            const alert = document.getElementById('custom-alert');
-            alert.innerText = msg;
-            alert.classList.add('show');
-            setTimeout(() => alert.classList.remove('show'), 3000);
-        }
+        function showAlert(msg) { const a = document.getElementById('custom-alert'); a.innerText = msg; a.classList.add('show'); setTimeout(() => a.classList.remove('show'), 3000); }
+        function selectPlan(p, pr) { userPlan = p; userPrice = pr; showAlert("Umechagua: " + p); }
+        function logout() { localStorage.removeItem('mickster_user'); localStorage.removeItem('mickster_active_token'); location.reload(); }
 
-        function logout() { localStorage.clear(); location.reload(); }
-
-        window.onload = () => {
-            updateProfileUI();
-            loadChannels();
-            loadSlides();
-        };
+        window.onload = () => { updateProfileUI(); loadChannels(); loadSlides(); };
     </script>
 </body>
 </html>
