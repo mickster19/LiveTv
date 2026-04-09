@@ -6,8 +6,11 @@
     <title>MICKSTER TV | Live Portal</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <link href="https://vjs.zencdn.net/8.10.0/video-js.css" rel="stylesheet" />
+    <link href="https://unpkg.com/@videojs/themes@1.0.1/dist/city/index.css" rel="stylesheet">
+    
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
 
     <style>
         :root {
@@ -67,6 +70,10 @@
 
         #custom-alert { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); width: 85%; background: var(--green); color: black; padding: 12px; border-radius: 10px; font-weight: bold; z-index: 9000; transition: 0.5s; text-align: center; }
         #custom-alert.show { top: 20px; }
+
+        /* Player Customization */
+        .video-js { width: 100%; height: 100%; }
+        .vjs-big-play-button { background-color: var(--green) !important; border-color: var(--green) !important; color: black !important; }
     </style>
 </head>
 <body>
@@ -79,7 +86,9 @@
             <i class="fa-solid fa-xmark" onclick="closePlayer()" style="font-size:24px; cursor:pointer; color:white;"></i>
         </div>
         <div style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; background:#000; position: relative;">
-            <video id="mickster-video" controls autoplay playsinline class="hidden" style="width:100%; max-height:100%;"></video>
+            <div id="video-container" class="hidden" style="width:100%; height:100%;">
+                <video id="mickster-video" class="video-js vjs-theme-city vjs-big-play-centered" controls preload="auto" playsinline></video>
+            </div>
             <iframe id="mickster-iframe" class="hidden" style="width:100%; height:100%; border:none;" allowfullscreen allow="autoplay"></iframe>
         </div>
     </div>
@@ -170,53 +179,44 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // --- BORESHA PLAYER LOGIC (IFRAME + VIDEO) ---
-        let hlsInstance = null;
+        // --- MODERN PLAYER LOGIC (VIDEO.JS) ---
+        let vjsPlayer = videojs('mickster-video', {
+            autoplay: true,
+            controls: true,
+            responsive: true,
+            fluid: true
+        });
 
         function playM3U8(url, name) {
-            const video = document.getElementById('mickster-video');
+            const videoContainer = document.getElementById('video-container');
             const iframe = document.getElementById('mickster-iframe');
             const modal = document.getElementById('video-modal');
             document.getElementById('playing-now').innerText = name;
             modal.classList.remove('hidden');
 
-            // Safisha zote
-            video.classList.add('hidden');
+            // Safisha muonekano
+            videoContainer.classList.add('hidden');
             iframe.classList.add('hidden');
-            video.pause();
-            video.src = "";
+            vjsPlayer.pause();
             iframe.src = "";
-            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
 
-            // 1. Angalia kama ni link ya PHP (TechnologyCloud)
             if (url.includes('.php')) {
                 iframe.classList.remove('hidden');
                 iframe.src = url;
-            } 
-            // 2. Kama ni link ya kawaida ya m3u8 au mp4
-            else {
-                video.classList.remove('hidden');
-                if (Hls.isSupported()) {
-                    hlsInstance = new Hls();
-                    hlsInstance.loadSource(url);
-                    hlsInstance.attachMedia(video);
-                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => video.play());
-                } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                    video.src = url;
-                    video.play();
-                } else {
-                    showAlert("Format ya video haisupportiwi!");
-                }
+            } else {
+                videoContainer.classList.remove('hidden');
+                vjsPlayer.src({
+                    src: url,
+                    type: url.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4'
+                });
+                vjsPlayer.play();
             }
         }
 
         function closePlayer() {
-            const video = document.getElementById('mickster-video');
+            vjsPlayer.pause();
             const iframe = document.getElementById('mickster-iframe');
-            video.pause();
-            video.src = "";
             iframe.src = "";
-            if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
             document.getElementById('video-modal').classList.add('hidden');
         }
 
@@ -264,15 +264,27 @@
             const pass = document.getElementById('auth-pass').value;
             const name = document.getElementById('reg-name').value;
             const mode = document.getElementById('tab-login').classList.contains('active') ? 'login' : 'register';
+            
             if(!phone || !pass) return showAlert("Jaza namba na nywila!");
+            
             if(mode === 'register') {
                 const { error } = await _supabase.from('profiles').insert([{ phone: phone, password: pass, full_name: name || "Mtumiaji" }]);
                 if(error) return showAlert("Namba imeshasajiliwa!");
                 login(phone);
             } else {
-                const { data } = await _supabase.from('profiles').select('*').eq('phone', phone).single();
-                if(data && data.password === pass) login(phone);
-                else showAlert("Namba au Nywila imekosewa!");
+                // FIXED LOGIN LOGIC
+                const { data, error } = await _supabase.from('profiles')
+                    .select('*')
+                    .eq('phone', phone)
+                    .maybeSingle();
+
+                if (error) return showAlert("Hitilafu ya mtandao!");
+                
+                if(data && data.password === pass) {
+                    login(phone);
+                } else {
+                    showAlert("Namba au Nywila imekosewa!");
+                }
             }
         }
 
