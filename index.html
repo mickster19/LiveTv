@@ -194,7 +194,6 @@
             document.getElementById('playing-now').innerText = name;
             modal.classList.remove('hidden');
 
-            // Safisha muonekano
             videoContainer.classList.add('hidden');
             iframe.classList.add('hidden');
             vjsPlayer.pause();
@@ -220,7 +219,6 @@
             document.getElementById('video-modal').classList.add('hidden');
         }
 
-        // --- LOAD CHANNELS ---
         async function loadChannels() {
             const { data, error } = await _supabase.from('channels').select('*');
             if(error) return;
@@ -272,7 +270,6 @@
                 if(error) return showAlert("Namba imeshasajiliwa!");
                 login(phone);
             } else {
-                // FIXED LOGIN LOGIC
                 const { data, error } = await _supabase.from('profiles')
                     .select('*')
                     .eq('phone', phone)
@@ -297,13 +294,29 @@
             loadChannels();
         }
 
+        // --- MAREKEBISHO YA ACTIVATE TOKEN (PUBLIC vs PRIVATE) ---
         async function activateToken() {
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
             if(!inputKey) return showAlert("Weka Token!");
-            const { data } = await _supabase.from('tokens').select('*').eq('key', inputKey).single();
+            
+            const { data, error } = await _supabase.from('tokens')
+                .select('status, device_id, type, expiry_date')
+                .eq('key', inputKey)
+                .maybeSingle();
+
             if(data) {
-                if(data.status === "used" && data.device_id !== myDeviceId) return showAlert("Token imeshatumika kifaa kingine!");
+                // Kagua ulinzi wa kifaa (One Device)
+                if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
+                    return showAlert("Token imeshatumika kifaa kingine!");
+                }
+
+                if(new Date() > new Date(data.expiry_date)) {
+                    return showAlert("Token hii imeshaisha muda!");
+                }
+
+                // Update database
                 await _supabase.from('tokens').update({ status: 'used', device_id: myDeviceId }).eq('key', inputKey);
+                
                 localStorage.setItem('mickster_active_token', inputKey);
                 document.getElementById('token-modal').classList.add('hidden');
                 updateProfileUI();
@@ -311,20 +324,32 @@
             } else { showAlert("Token Sio Sahihi!"); }
         }
 
+        // --- MAREKEBISHO YA CHECK AND OPEN (PUBLIC vs PRIVATE) ---
         async function checkAndOpen(chan, link) {
             if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
             const activeToken = localStorage.getItem('mickster_active_token');
             if(!activeToken) { document.getElementById('token-modal').classList.remove('hidden'); return; }
 
-            const { data } = await _supabase.from('tokens').select('expiry_date').eq('key', activeToken).single();
+            const { data } = await _supabase.from('tokens')
+                .select('expiry_date, device_id, type')
+                .eq('key', activeToken)
+                .maybeSingle();
+
             if(data) {
                 if(new Date() > new Date(data.expiry_date)) {
                     localStorage.removeItem('mickster_active_token');
                     showAlert("Token yako IMEISHA!");
                     document.getElementById('token-modal').classList.remove('hidden');
-                } else {
-                    playM3U8(link, chan);
+                    return;
+                } 
+
+                // Kagua kama ni Private na kifaa ni tofauti
+                if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
+                    showAlert("Token hii inatumika kwenye kifaa kingine!");
+                    return;
                 }
+
+                playM3U8(link, chan);
             } else { document.getElementById('token-modal').classList.remove('hidden'); }
         }
 
@@ -340,7 +365,7 @@
                 const phone = localStorage.getItem('mickster_user');
                 document.getElementById('guest-view').classList.add('hidden');
                 document.getElementById('user-profile-view').classList.remove('hidden');
-                const { data } = await _supabase.from('profiles').select('full_name').eq('phone', phone).single();
+                const { data } = await _supabase.from('profiles').select('full_name').eq('phone', phone).maybeSingle();
                 if(data) document.getElementById('profile-name').innerText = data.full_name;
                 const t = localStorage.getItem('mickster_active_token');
                 document.getElementById('profile-status').innerText = t ? "PREMIUM ACTIVE ✅" : "Token: Haipo";
