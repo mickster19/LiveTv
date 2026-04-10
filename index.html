@@ -34,6 +34,11 @@
         }
         .brand { color: var(--green); font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 1px; }
         .yt-link { color: #ff0000; font-size: 22px; text-decoration: none; }
+        
+        /* Mpangilio wa icons za kulia */
+        .top-icons { display: flex; align-items: center; gap: 15px; }
+        .game-link { color: var(--green); font-size: 22px; text-decoration: none; transition: 0.3s; }
+        .game-link:hover { opacity: 0.8; }
 
         /* --- SLIDER --- */
         .slider-container { width: 92%; height: 180px; margin: 15px auto; border-radius: 20px; overflow: hidden; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.4); background: #111; }
@@ -121,8 +126,15 @@
     <header>
         <div class="brand">MICKSTER TV</div>
         <div class="top-icons">
-            <a href="https://youtube.com/@m45z9o?si=2pb80nZcANifsHSt" target="_blank" class="yt-link"><i class="fa-brands fa-youtube"></i></a>
-            <div class="user-icon" style="display:inline-block; margin-left:15px" onclick="switchTab('wasifu')"><i class="fa-regular fa-user" style="color:var(--green); font-size:20px;"></i></div>
+            <a href="https://mickster19.github.io/Mickster-vault-/" target="_blank" class="game-link">
+                <i class="fa-solid fa-gamepad"></i>
+            </a>
+            <a href="https://youtube.com/@m45z9o?si=2pb80nZcANifsHSt" target="_blank" class="yt-link">
+                <i class="fa-brands fa-youtube"></i>
+            </a>
+            <div class="user-icon" style="cursor:pointer;" onclick="switchTab('wasifu')">
+                <i class="fa-regular fa-user" style="color:var(--green); font-size:20px;"></i>
+            </div>
         </div>
     </header>
 
@@ -294,7 +306,7 @@
             loadChannels();
         }
 
-        // --- MAREKEBISHO YA ACTIVATE TOKEN (PUBLIC vs PRIVATE) ---
+        // --- REKEBISHO LA ACTIVATE TOKEN ---
         async function activateToken() {
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
             if(!inputKey) return showAlert("Weka Token!");
@@ -305,7 +317,7 @@
                 .maybeSingle();
 
             if(data) {
-                // Kagua ulinzi wa kifaa (One Device)
+                // Kagua ulinzi wa kifaa TU kama sio public
                 if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
                     return showAlert("Token imeshatumika kifaa kingine!");
                 }
@@ -314,8 +326,13 @@
                     return showAlert("Token hii imeshaisha muda!");
                 }
 
-                // Update database
-                await _supabase.from('tokens').update({ status: 'used', device_id: myDeviceId }).eq('key', inputKey);
+                // Update device_id TU kama sio public
+                let updateData = { status: 'used' };
+                if(data.type !== 'public') {
+                    updateData.device_id = myDeviceId;
+                }
+
+                await _supabase.from('tokens').update(updateData).eq('key', inputKey);
                 
                 localStorage.setItem('mickster_active_token', inputKey);
                 document.getElementById('token-modal').classList.add('hidden');
@@ -324,7 +341,7 @@
             } else { showAlert("Token Sio Sahihi!"); }
         }
 
-        // --- MAREKEBISHO YA CHECK AND OPEN (PUBLIC vs PRIVATE) ---
+        // --- REKEBISHO LA CHECK AND OPEN ---
         async function checkAndOpen(chan, link) {
             if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
             const activeToken = localStorage.getItem('mickster_active_token');
@@ -343,7 +360,7 @@
                     return;
                 } 
 
-                // Kagua kama ni Private na kifaa ni tofauti
+                // Kagua kifaa TU kama sio public
                 if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
                     showAlert("Token hii inatumika kwenye kifaa kingine!");
                     return;
