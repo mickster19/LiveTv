@@ -35,7 +35,6 @@
         .brand { color: var(--green); font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 8px; text-transform: uppercase; letter-spacing: 1px; }
         .yt-link { color: #ff0000; font-size: 22px; text-decoration: none; }
         
-        /* Mpangilio wa icons za kulia */
         .top-icons { display: flex; align-items: center; gap: 15px; }
         .game-link { color: var(--green); font-size: 22px; text-decoration: none; transition: 0.3s; }
         .game-link:hover { opacity: 0.8; }
@@ -65,7 +64,10 @@
         .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 0 15px 20px; }
         .card { background: var(--card); border-radius: 15px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s; cursor: pointer; }
         .thumb { width: 100%; height: 110px; background-size: cover; background-position: center; position: relative; background-color: #222; }
+        
+        /* Tags */
         .live-tag { position: absolute; top: 10px; left: 10px; background: var(--accent); font-size: 9px; padding: 3px 10px; border-radius: 5px; font-weight: bold; }
+        .free-badge { position: absolute; top: 10px; right: 10px; background: var(--green); color: black; font-size: 9px; padding: 3px 10px; border-radius: 5px; font-weight: bold; }
 
         /* --- BOTTOM NAV --- */
         .bottom-nav { position: fixed; bottom: 0; width: 100%; background: #070a0d; display: flex; padding: 12px 0; border-top: 1px solid rgba(255,255,255,0.05); z-index: 2000; }
@@ -76,7 +78,6 @@
         #custom-alert { position: fixed; top: -100px; left: 50%; transform: translateX(-50%); width: 85%; background: var(--green); color: black; padding: 12px; border-radius: 10px; font-weight: bold; z-index: 9000; transition: 0.5s; text-align: center; }
         #custom-alert.show { top: 20px; }
 
-        /* Player Customization */
         .video-js { width: 100%; height: 100%; }
         .vjs-big-play-button { background-color: var(--green) !important; border-color: var(--green) !important; color: black !important; }
     </style>
@@ -191,7 +192,6 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // --- MODERN PLAYER LOGIC (VIDEO.JS) ---
         let vjsPlayer = videojs('mickster-video', {
             autoplay: true,
             controls: true,
@@ -237,9 +237,12 @@
             const grid = document.getElementById('main-grid'); 
             grid.innerHTML = "";
             data.forEach(c => {
-                grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}')">
+                const freeBadge = c.is_free ? '<div class="free-badge">FREE</div>' : '';
+                // Logic ya kupitisha vigezo vya channel kwenye click
+                grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}', ${c.is_free})">
                     <div class="thumb" style="background-image:url('${c.icon_url || 'https://via.placeholder.com/150'}')">
                         <div class="live-tag">LIVE</div>
+                        ${freeBadge}
                     </div>
                     <div style="padding:12px; font-size:13px; font-weight:600;">${c.channel_name}</div>
                 </div>`;
@@ -306,7 +309,6 @@
             loadChannels();
         }
 
-        // --- REKEBISHO LA ACTIVATE TOKEN ---
         async function activateToken() {
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
             if(!inputKey) return showAlert("Weka Token!");
@@ -317,7 +319,6 @@
                 .maybeSingle();
 
             if(data) {
-                // Kagua ulinzi wa kifaa TU kama sio public
                 if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
                     return showAlert("Token imeshatumika kifaa kingine!");
                 }
@@ -326,7 +327,6 @@
                     return showAlert("Token hii imeshaisha muda!");
                 }
 
-                // Update device_id TU kama sio public
                 let updateData = { status: 'used' };
                 if(data.type !== 'public') {
                     updateData.device_id = myDeviceId;
@@ -341,11 +341,27 @@
             } else { showAlert("Token Sio Sahihi!"); }
         }
 
-        // --- REKEBISHO LA CHECK AND OPEN ---
-        async function checkAndOpen(chan, link) {
-            if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
+        // --- REKEBISHO LA LOGIC YA KUCHEZA ---
+        async function checkAndOpen(chan, link, isFree) {
+            // 1. Kama channel ni FREE, icheze moja kwa moja
+            if(isFree) {
+                playM3U8(link, chan);
+                return;
+            }
+
+            // 2. Kama ni Premium, lazima awe ameingia (Auth)
+            if(!isLoggedIn) { 
+                switchTab('wasifu'); 
+                toggleAuth(true); 
+                return; 
+            }
+
+            // 3. Kagua Token kwa Premium
             const activeToken = localStorage.getItem('mickster_active_token');
-            if(!activeToken) { document.getElementById('token-modal').classList.remove('hidden'); return; }
+            if(!activeToken) { 
+                document.getElementById('token-modal').classList.remove('hidden'); 
+                return; 
+            }
 
             const { data } = await _supabase.from('tokens')
                 .select('expiry_date, device_id, type')
@@ -360,14 +376,15 @@
                     return;
                 } 
 
-                // Kagua kifaa TU kama sio public
                 if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
                     showAlert("Token hii inatumika kwenye kifaa kingine!");
                     return;
                 }
 
                 playM3U8(link, chan);
-            } else { document.getElementById('token-modal').classList.remove('hidden'); }
+            } else { 
+                document.getElementById('token-modal').classList.remove('hidden'); 
+            }
         }
 
         function switchTab(t) {
