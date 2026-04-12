@@ -10,6 +10,7 @@
     <link href="https://unpkg.com/@videojs/themes@1.0.1/dist/city/index.css" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
     <script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/videojs-contrib-eme@5.0.1/dist/videojs-contrib-eme.min.js"></script>
 
@@ -94,7 +95,7 @@
         </div>
         <div style="flex:1; width:100%; display:flex; align-items:center; justify-content:center; background:#000; position: relative;">
             <div id="video-container" class="hidden" style="width:100%; height:100%;">
-                <video id="mickster-video" class="video-js vjs-theme-city vjs-big-play-centered" controls preload="auto" playsinline></video>
+                <video id="mickster-video" class="video-js vjs-theme-city vjs-big-play-centered" controls preload="auto" playsinline crossorigin="anonymous"></video>
             </div>
             <iframe id="mickster-iframe" class="hidden" style="width:100%; height:100%; border:none;" allowfullscreen allow="autoplay"></iframe>
         </div>
@@ -193,16 +194,23 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // Kuanzisha Player na Plugin ya EME kwa ajili ya DRM
+        // --- MAREKEBISHO: SMART PLAYER INITIALIZATION ---
         let vjsPlayer = videojs('mickster-video', {
             autoplay: true,
             controls: true,
             responsive: true,
-            fluid: true
+            fluid: true,
+            preload: 'auto',
+            html5: { 
+                vhs: { overrideNative: true }, 
+                nativeAudioTracks: false, 
+                nativeVideoTracks: false 
+            }
         });
+        
         vjsPlayer.eme(); 
 
-        function playM3U8(url, name, kid = null, key = null) {
+        function playStream(url, name, kid = null, key = null) {
             const videoContainer = document.getElementById('video-container');
             const iframe = document.getElementById('mickster-iframe');
             const modal = document.getElementById('video-modal');
@@ -212,46 +220,51 @@
             videoContainer.classList.add('hidden');
             iframe.classList.add('hidden');
             vjsPlayer.pause();
-            iframe.src = "";
+            vjsPlayer.src(""); // Reset source kuzuia duplication
 
-            if (url.includes('.php')) {
+            if (url.includes('.php') || url.includes('embed')) {
                 iframe.classList.remove('hidden');
                 iframe.src = url;
             } else {
                 videoContainer.classList.remove('hidden');
                 
-                // Kugundua format ya video (M3U8 au MPD)
-                let type = 'application/x-mpegURL'; // Default ni M3U8
-                if (url.includes('.mpd')) {
-                    type = 'application/dash+xml'; // Kama ni MPD
+                // MAREKEBISHO: Kutambua format ili kuzuia browser isidownload .js
+                let type = 'application/x-mpegURL'; 
+                if (url.toLowerCase().includes('.mpd')) {
+                    type = 'application/dash+xml';
                 }
 
-                let playerOptions = {
-                    src: url,
-                    type: type
+                let sourceData = { 
+                    src: url, 
+                    type: type,
+                    handleManifestRedirects: true 
                 };
 
-                // Kuweka ClearKey DRM kama kuna KID na KEY
-                if (kid && key && url.includes('.mpd')) {
-                    playerOptions.keySystems = {
+                // MAREKEBISHO: ClearKey DRM Logic
+                if (kid && key && type === 'application/dash+xml') {
+                    sourceData.keySystems = {
                         'org.w3.clearkey': {
                             clearkeys: { [kid]: key }
                         }
                     };
                 }
 
-                vjsPlayer.src(playerOptions);
-                vjsPlayer.play();
+                vjsPlayer.src(sourceData);
+                vjsPlayer.load(); // Lazimisha kupakia upya
+                vjsPlayer.play().catch(e => {
+                    console.log("Play failed, Link inaweza kuwa na makosa ya CORS:", e);
+                });
             }
         }
 
         function closePlayer() {
             vjsPlayer.pause();
-            const iframe = document.getElementById('mickster-iframe');
-            iframe.src = "";
+            vjsPlayer.src(""); 
+            document.getElementById('mickster-iframe').src = "";
             document.getElementById('video-modal').classList.add('hidden');
         }
 
+        // --- DATA LOADING ---
         async function loadChannels() {
             const { data, error } = await _supabase.from('channels').select('*');
             if(error) return;
@@ -269,54 +282,52 @@
             });
         }
 
-        async function loadSlides() {
-            const { data, error } = await _supabase.from('slides').select('*');
-            if(!error && data && data.length > 0) {
-                const slider = document.getElementById('slider-box'); slider.innerHTML = "";
-                data.forEach((s, i) => {
-                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');">
-                        <div class="slide-overlay"><h3>${s.caption || ''}</h3></div>
-                    </div>`;
-                });
-                startSlider();
+        async function checkAndOpen(chan, link, isFree, kid, key) {
+            if(isFree) {
+                playStream(link, chan, kid, key);
+                return;
+            }
+
+            if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
+
+            const activeToken = localStorage.getItem('mickster_active_token');
+            if(!activeToken) { document.getElementById('token-modal').classList.remove('hidden'); return; }
+
+            const { data } = await _supabase.from('tokens').select('expiry_date, device_id, type').eq('key', activeToken).maybeSingle();
+
+            if(data) {
+                if(new Date() > new Date(data.expiry_date)) {
+                    localStorage.removeItem('mickster_active_token');
+                    showAlert("Token yako IMEISHA!");
+                    document.getElementById('token-modal').classList.remove('hidden');
+                    return;
+                } 
+                if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
+                    showAlert("Token hii inatumika kwenye kifaa kingine!");
+                    return;
+                }
+                playStream(link, chan, kid, key);
+            } else { 
+                document.getElementById('token-modal').classList.remove('hidden'); 
             }
         }
 
-        let currentSlide = 0;
-        function startSlider() { setInterval(() => { const slides = document.querySelectorAll('.slide'); if(slides.length > 1) { slides[currentSlide].classList.remove('active'); currentSlide = (currentSlide + 1) % slides.length; slides[currentSlide].classList.add('active'); } }, 5000); }
-
-        function toggleAuth(show) { document.getElementById('auth-overlay').classList.toggle('hidden', !show); }
-        function setAuthMode(mode) {
-            document.getElementById('box-name').classList.toggle('hidden', mode === 'login');
-            document.getElementById('tab-login').classList.toggle('active', mode === 'login');
-            document.getElementById('tab-register').classList.toggle('active', mode === 'register');
-        }
-
+        // --- AUTH & OTHER LOGIC ---
         async function handleAuth() {
             const phone = document.getElementById('auth-phone').value.trim();
             const pass = document.getElementById('auth-pass').value;
             const name = document.getElementById('reg-name').value;
             const mode = document.getElementById('tab-login').classList.contains('active') ? 'login' : 'register';
-            
             if(!phone || !pass) return showAlert("Jaza namba na nywila!");
             
             if(mode === 'register') {
-                const { error } = await _supabase.from('profiles').insert([{ phone: phone, password: pass, full_name: name || "Mtumiaji" }]);
+                const { error } = await _supabase.from('profiles').insert([{ phone, password: pass, full_name: name || "Mtumiaji" }]);
                 if(error) return showAlert("Namba imeshasajiliwa!");
                 login(phone);
             } else {
-                const { data, error } = await _supabase.from('profiles')
-                    .select('*')
-                    .eq('phone', phone)
-                    .maybeSingle();
-
-                if (error) return showAlert("Hitilafu ya mtandao!");
-                
-                if(data && data.password === pass) {
-                    login(phone);
-                } else {
-                    showAlert("Namba au Nywila imekosewa!");
-                }
+                const { data } = await _supabase.from('profiles').select('*').eq('phone', phone).maybeSingle();
+                if(data && data.password === pass) login(phone);
+                else showAlert("Namba au Nywila imekosewa!");
             }
         }
 
@@ -331,76 +342,24 @@
 
         async function activateToken() {
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
-            if(!inputKey) return showAlert("Weka Token!");
-            
-            const { data, error } = await _supabase.from('tokens')
-                .select('status, device_id, type, expiry_date')
-                .eq('key', inputKey)
-                .maybeSingle();
-
+            const { data } = await _supabase.from('tokens').select('*').eq('key', inputKey).maybeSingle();
             if(data) {
-                if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
-                    return showAlert("Token imeshatumika kifaa kingine!");
-                }
-
-                if(new Date() > new Date(data.expiry_date)) {
-                    return showAlert("Token hii imeshaisha muda!");
-                }
-
-                let updateData = { status: 'used' };
-                if(data.type !== 'public') {
-                    updateData.device_id = myDeviceId;
-                }
-
-                await _supabase.from('tokens').update(updateData).eq('key', inputKey);
+                if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) return showAlert("Token imeshatumika kifaa kingine!");
+                if(new Date() > new Date(data.expiry_date)) return showAlert("Token imeisha muda!");
                 
+                await _supabase.from('tokens').update({ status: 'used', device_id: data.type === 'public' ? null : myDeviceId }).eq('key', inputKey);
                 localStorage.setItem('mickster_active_token', inputKey);
                 document.getElementById('token-modal').classList.add('hidden');
                 updateProfileUI();
                 showAlert("Token Imewashwa! ✅");
-            } else { showAlert("Token Sio Sahihi!"); }
+            } else showAlert("Token Sio Sahihi!");
         }
 
-        async function checkAndOpen(chan, link, isFree, kid, key) {
-            if(isFree) {
-                playM3U8(link, chan, kid, key);
-                return;
-            }
-
-            if(!isLoggedIn) { 
-                switchTab('wasifu'); 
-                toggleAuth(true); 
-                return; 
-            }
-
-            const activeToken = localStorage.getItem('mickster_active_token');
-            if(!activeToken) { 
-                document.getElementById('token-modal').classList.remove('hidden'); 
-                return; 
-            }
-
-            const { data } = await _supabase.from('tokens')
-                .select('expiry_date, device_id, type')
-                .eq('key', activeToken)
-                .maybeSingle();
-
-            if(data) {
-                if(new Date() > new Date(data.expiry_date)) {
-                    localStorage.removeItem('mickster_active_token');
-                    showAlert("Token yako IMEISHA!");
-                    document.getElementById('token-modal').classList.remove('hidden');
-                    return;
-                } 
-
-                if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) {
-                    showAlert("Token hii inatumika kwenye kifaa kingine!");
-                    return;
-                }
-
-                playM3U8(link, chan, kid, key);
-            } else { 
-                document.getElementById('token-modal').classList.remove('hidden'); 
-            }
+        function toggleAuth(show) { document.getElementById('auth-overlay').classList.toggle('hidden', !show); }
+        function setAuthMode(mode) {
+            document.getElementById('box-name').classList.toggle('hidden', mode === 'login');
+            document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+            document.getElementById('tab-register').classList.toggle('active', mode === 'register');
         }
 
         function switchTab(t) {
@@ -408,6 +367,27 @@
             document.getElementById('sec-' + t).classList.remove('hidden');
             document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
             document.getElementById('nav-' + t).classList.add('active');
+        }
+
+        async function loadSlides() {
+            const { data } = await _supabase.from('slides').select('*');
+            if(data && data.length > 0) {
+                const slider = document.getElementById('slider-box'); slider.innerHTML = "";
+                data.forEach((s, i) => {
+                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');">
+                        <div class="slide-overlay"><h3>${s.caption || ''}</h3></div>
+                    </div>`;
+                });
+                let current = 0;
+                setInterval(() => {
+                    const slides = document.querySelectorAll('.slide');
+                    if(slides.length > 1) {
+                        slides[current].classList.remove('active');
+                        current = (current + 1) % slides.length;
+                        slides[current].classList.add('active');
+                    }
+                }, 5000);
+            }
         }
 
         async function updateProfileUI() {
@@ -426,7 +406,7 @@
 
         function showAlert(msg) { const a = document.getElementById('custom-alert'); a.innerText = msg; a.classList.add('show'); setTimeout(() => a.classList.remove('show'), 3000); }
         function selectPlan(p, pr) { userPlan = p; userPrice = pr; showAlert("Umechagua: " + p); }
-        function logout() { localStorage.removeItem('mickster_user'); localStorage.removeItem('mickster_active_token'); location.reload(); }
+        function logout() { localStorage.clear(); location.reload(); }
         function processPayment() { if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; } window.open(`https://wa.me/255791139331?text=Nahitaji Token: ${userPlan} kwa namba ${localStorage.getItem('mickster_user')}`, '_blank'); }
 
         window.onload = () => { updateProfileUI(); loadChannels(); loadSlides(); };
