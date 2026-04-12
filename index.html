@@ -193,13 +193,14 @@
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
+        // Kuanzisha Player na Plugin ya EME kwa ajili ya DRM
         let vjsPlayer = videojs('mickster-video', {
             autoplay: true,
             controls: true,
             responsive: true,
             fluid: true
         });
-        vjsPlayer.eme(); // Amilisha DRM bila kubadili kitu
+        vjsPlayer.eme(); 
 
         function playM3U8(url, name, kid = null, key = null) {
             const videoContainer = document.getElementById('video-container');
@@ -219,13 +220,19 @@
             } else {
                 videoContainer.classList.remove('hidden');
                 
+                // Kugundua format ya video (M3U8 au MPD)
+                let type = 'application/x-mpegURL'; // Default ni M3U8
+                if (url.includes('.mpd')) {
+                    type = 'application/dash+xml'; // Kama ni MPD
+                }
+
                 let playerOptions = {
                     src: url,
-                    type: url.includes('.mpd') ? 'application/dash+xml' : (url.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4')
+                    type: type
                 };
 
-                // Kama kuna KID na KEY, basi tumia ClearKey DRM
-                if (kid && key) {
+                // Kuweka ClearKey DRM kama kuna KID na KEY
+                if (kid && key && url.includes('.mpd')) {
                     playerOptions.keySystems = {
                         'org.w3.clearkey': {
                             clearkeys: { [kid]: key }
@@ -252,7 +259,6 @@
             grid.innerHTML = "";
             data.forEach(c => {
                 const freeBadge = c.is_free ? '<div class="free-badge">FREE</div>' : '';
-                // Sasa hapa tunapitisha na KID/KEY kwenye kila card
                 grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}', ${c.is_free}, '${c.kid || ''}', '${c.key || ''}')">
                     <div class="thumb" style="background-image:url('${c.icon_url || 'https://via.placeholder.com/150'}')">
                         <div class="live-tag">LIVE</div>
