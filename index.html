@@ -67,7 +67,6 @@
         .card { background: var(--card); border-radius: 15px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); transition: 0.3s; cursor: pointer; }
         .thumb { width: 100%; height: 110px; background-size: cover; background-position: center; position: relative; background-color: #222; }
         
-        /* Tags */
         .live-tag { position: absolute; top: 10px; left: 10px; background: var(--accent); font-size: 9px; padding: 3px 10px; border-radius: 5px; font-weight: bold; }
         .free-badge { position: absolute; top: 10px; right: 10px; background: var(--green); color: black; font-size: 9px; padding: 3px 10px; border-radius: 5px; font-weight: bold; }
 
@@ -189,27 +188,17 @@
         const SUPABASE_KEY = 'sb_publishable_BJXwjHQLipzLDk3vgki8TQ_3PiiOjl2'; 
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        let userPlan = "Siku 3", userPrice = "1,000";
         let isLoggedIn = localStorage.getItem('mickster_user') ? true : false;
         let myDeviceId = localStorage.getItem('mickster_device_id') || 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
         localStorage.setItem('mickster_device_id', myDeviceId);
 
-        // --- MAREKEBISHO: SMART PLAYER INITIALIZATION ---
         let vjsPlayer = videojs('mickster-video', {
-            autoplay: true,
-            controls: true,
-            responsive: true,
-            fluid: true,
-            preload: 'auto',
-            html5: { 
-                vhs: { overrideNative: true }, 
-                nativeAudioTracks: false, 
-                nativeVideoTracks: false 
-            }
+            autoplay: true, controls: true, responsive: true, fluid: true, preload: 'auto',
+            html5: { vhs: { overrideNative: true }, nativeAudioTracks: false, nativeVideoTracks: false }
         });
-        
         vjsPlayer.eme(); 
 
+        // --- MAREKEBISHO PEKEE YA GONAME ---
         function playStream(url, name, kid = null, key = null) {
             const videoContainer = document.getElementById('video-container');
             const iframe = document.getElementById('mickster-iframe');
@@ -220,40 +209,27 @@
             videoContainer.classList.add('hidden');
             iframe.classList.add('hidden');
             vjsPlayer.pause();
-            vjsPlayer.src(""); // Reset source kuzuia duplication
+            vjsPlayer.src(""); 
+
+            if (url.startsWith('go:')) {
+                window.location.href = url; 
+                modal.classList.add('hidden');
+                return; 
+            }
 
             if (url.includes('.php') || url.includes('embed')) {
                 iframe.classList.remove('hidden');
                 iframe.src = url;
             } else {
                 videoContainer.classList.remove('hidden');
-                
-                // MAREKEBISHO: Kutambua format ili kuzuia browser isidownload .js
-                let type = 'application/x-mpegURL'; 
-                if (url.toLowerCase().includes('.mpd')) {
-                    type = 'application/dash+xml';
-                }
-
-                let sourceData = { 
-                    src: url, 
-                    type: type,
-                    handleManifestRedirects: true 
-                };
-
-                // MAREKEBISHO: ClearKey DRM Logic
+                let type = url.toLowerCase().includes('.mpd') ? 'application/dash+xml' : 'application/x-mpegURL';
+                let sourceData = { src: url, type: type, handleManifestRedirects: true };
                 if (kid && key && type === 'application/dash+xml') {
-                    sourceData.keySystems = {
-                        'org.w3.clearkey': {
-                            clearkeys: { [kid]: key }
-                        }
-                    };
+                    sourceData.keySystems = { 'org.w3.clearkey': { clearkeys: { [kid]: key } } };
                 }
-
                 vjsPlayer.src(sourceData);
-                vjsPlayer.load(); // Lazimisha kupakia upya
-                vjsPlayer.play().catch(e => {
-                    console.log("Play failed, Link inaweza kuwa na makosa ya CORS:", e);
-                });
+                vjsPlayer.load();
+                vjsPlayer.play().catch(e => console.log("Play failed:", e));
             }
         }
 
@@ -264,18 +240,15 @@
             document.getElementById('video-modal').classList.add('hidden');
         }
 
-        // --- DATA LOADING ---
         async function loadChannels() {
             const { data, error } = await _supabase.from('channels').select('*');
             if(error) return;
-            const grid = document.getElementById('main-grid'); 
-            grid.innerHTML = "";
+            const grid = document.getElementById('main-grid'); grid.innerHTML = "";
             data.forEach(c => {
                 const freeBadge = c.is_free ? '<div class="free-badge">FREE</div>' : '';
                 grid.innerHTML += `<div class="card" onclick="checkAndOpen('${c.channel_name}', '${c.stream_url}', ${c.is_free}, '${c.kid || ''}', '${c.key || ''}')">
                     <div class="thumb" style="background-image:url('${c.icon_url || 'https://via.placeholder.com/150'}')">
-                        <div class="live-tag">LIVE</div>
-                        ${freeBadge}
+                        <div class="live-tag">LIVE</div>${freeBadge}
                     </div>
                     <div style="padding:12px; font-size:13px; font-weight:600;">${c.channel_name}</div>
                 </div>`;
@@ -283,18 +256,11 @@
         }
 
         async function checkAndOpen(chan, link, isFree, kid, key) {
-            if(isFree) {
-                playStream(link, chan, kid, key);
-                return;
-            }
-
+            if(isFree) { playStream(link, chan, kid, key); return; }
             if(!isLoggedIn) { switchTab('wasifu'); toggleAuth(true); return; }
-
             const activeToken = localStorage.getItem('mickster_active_token');
             if(!activeToken) { document.getElementById('token-modal').classList.remove('hidden'); return; }
-
             const { data } = await _supabase.from('tokens').select('expiry_date, device_id, type').eq('key', activeToken).maybeSingle();
-
             if(data) {
                 if(new Date() > new Date(data.expiry_date)) {
                     localStorage.removeItem('mickster_active_token');
@@ -307,19 +273,15 @@
                     return;
                 }
                 playStream(link, chan, kid, key);
-            } else { 
-                document.getElementById('token-modal').classList.remove('hidden'); 
-            }
+            } else { document.getElementById('token-modal').classList.remove('hidden'); }
         }
 
-        // --- AUTH & OTHER LOGIC ---
         async function handleAuth() {
             const phone = document.getElementById('auth-phone').value.trim();
             const pass = document.getElementById('auth-pass').value;
             const name = document.getElementById('reg-name').value;
             const mode = document.getElementById('tab-login').classList.contains('active') ? 'login' : 'register';
             if(!phone || !pass) return showAlert("Jaza namba na nywila!");
-            
             if(mode === 'register') {
                 const { error } = await _supabase.from('profiles').insert([{ phone, password: pass, full_name: name || "Mtumiaji" }]);
                 if(error) return showAlert("Namba imeshasajiliwa!");
@@ -331,22 +293,13 @@
             }
         }
 
-        function login(phone) {
-            localStorage.setItem('mickster_user', phone);
-            isLoggedIn = true;
-            toggleAuth(false);
-            updateProfileUI();
-            showAlert("Karibu MICKSTER TV!");
-            loadChannels();
-        }
-
+        function login(phone) { localStorage.setItem('mickster_user', phone); isLoggedIn = true; toggleAuth(false); updateProfileUI(); showAlert("Karibu MICKSTER TV!"); loadChannels(); }
         async function activateToken() {
             const inputKey = document.getElementById('modal-token-input').value.toUpperCase().trim();
             const { data } = await _supabase.from('tokens').select('*').eq('key', inputKey).maybeSingle();
             if(data) {
                 if(data.type !== 'public' && data.device_id && data.device_id !== myDeviceId) return showAlert("Token imeshatumika kifaa kingine!");
                 if(new Date() > new Date(data.expiry_date)) return showAlert("Token imeisha muda!");
-                
                 await _supabase.from('tokens').update({ status: 'used', device_id: data.type === 'public' ? null : myDeviceId }).eq('key', inputKey);
                 localStorage.setItem('mickster_active_token', inputKey);
                 document.getElementById('token-modal').classList.add('hidden');
@@ -374,9 +327,7 @@
             if(data && data.length > 0) {
                 const slider = document.getElementById('slider-box'); slider.innerHTML = "";
                 data.forEach((s, i) => {
-                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');">
-                        <div class="slide-overlay"><h3>${s.caption || ''}</h3></div>
-                    </div>`;
+                    slider.innerHTML += `<div class="slide ${i===0?'active':''}" style="background-image: url('${s.url}');"><div class="slide-overlay"><h3>${s.caption || ''}</h3></div></div>`;
                 });
                 let current = 0;
                 setInterval(() => {
